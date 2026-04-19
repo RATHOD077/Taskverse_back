@@ -27,16 +27,18 @@ transporter.verify((error) => {
   }
 });
 
-// Auto-migrate: add scheduled_at column if it doesn't exist
+// Auto-migrate: add scheduled_at column safely
 (async () => {
   try {
-    await db.execute(
-      `ALTER TABLE email_logs ADD COLUMN IF NOT EXISTS scheduled_at DATETIME NULL DEFAULT NULL`
-    );
-    console.log("✅ email_logs.scheduled_at column ready");
+    const [cols] = await db.execute("SHOW COLUMNS FROM email_logs LIKE 'scheduled_at'");
+    if (cols.length === 0) {
+      await db.execute("ALTER TABLE email_logs ADD COLUMN scheduled_at DATETIME NULL DEFAULT NULL");
+      console.log("✅ email_logs.scheduled_at column added and ready");
+    } else {
+      console.log("✅ email_logs.scheduled_at column already exists");
+    }
   } catch (e) {
-    // Ignore — column may already exist or DB doesn't support ADD IF NOT EXISTS
-    console.log("ℹ️  scheduled_at column check skipped:", e.message);
+    console.log("ℹ️ scheduled_at column check failed (safe to ignore):", e.message);
   }
 })();
 

@@ -1,0 +1,23 @@
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "/home/jaigajan/crmadmin.jaigajanan.in"
+PassengerBaseURI "/"
+PassengerNodejs "/home/jaigajan/nodevenv/crmadmin.jaigajanan.in/20/bin/node"
+PassengerAppType node
+PassengerStartupFile server.js
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+
+# DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION BEGIN
+<IfModule Litespeed>
+SetEnv DB_HOST localhost
+SetEnv DB_USER root
+SetEnv DB_PASSWORD ""
+SetEnv DB_NAME taskverse
+SetEnv DB_PORT 3306
+SetEnv PORT 5000
+SetEnv JWT_SECRET tasksarsnkg,mfnfvajdngkjnbskjnfdkjfnkjvnfjakdngkjkjdzkfjfvkjkjgjvkjad
+SetEnv SMTP_HOST smtp.gmail.com
+SetEnv SMTP_PORT 587
+SetEnv SMTP_USER jadhavsanika1017@gmail.com
+SetEnv SMTP_PASS pxfbdfvriyinaufv
+</IfModule>
+# DO NOT REMOVE OR MODIFY. CLOUDLINUX ENV VARS CONFIGURATION END

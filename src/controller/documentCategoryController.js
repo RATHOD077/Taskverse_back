@@ -4,21 +4,30 @@
  */
 
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 /**
  * Get All Document Categories
  */
 exports.getAllCategories = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM doc_category');
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(
       `SELECT id, name, description, color, status, created_at, updated_at 
        FROM doc_category 
-       ORDER BY id ASC`
+       ORDER BY id ASC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
     );
 
     res.json({
       success: true,
-      categories: rows
+      categories: rows,
+      pagination: getPagingMeta({ total, page, limit })
     });
   } catch (error) {
     console.error('Get categories error:', error);

@@ -18,9 +18,9 @@ exports.getDashboardStats = async (req, res) => {
     );
     const totalUsers = totalUsersRes[0].total;
 
-    // Active Tasks (status = 'in_process' or 'pending')
+    // Active Tasks (status = 'in_process' or 'pending', case-insensitive)
     const [activeTasksRes] = await db.query(
-      "SELECT COUNT(*) AS active FROM task WHERE status IN ('pending', 'in_process')"
+      "SELECT COUNT(*) AS active FROM task WHERE LOWER(status) IN ('pending', 'in_process', 'not started', 'waiting', '')"
     );
     const activeTasks = activeTasksRes[0].active;
 
@@ -281,4 +281,4 @@ exports.getEmpCalendarEvents = async (req, res) => {
       message: 'Failed to fetch calendar events'
     });
   }
-};
+};

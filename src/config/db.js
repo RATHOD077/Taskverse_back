@@ -15,11 +15,12 @@ const db = mysql.createPool({
 
 db.getConnection((err, connection) => {
   if (err) {
-    console.error('Database connection failed:', err.message);
-    process.exit(1);
+    console.error('❌ Database connection failed:', err.message);
+    console.error('⚠️ Ensure DB_USER, DB_PASSWORD, and DB_NAME are correct in your .env or cPanel settings.');
+  } else {
+    console.log('✅ MySQL Connected successfully');
+    connection.release();
   }
-  console.log('MySQL Connected successfully');
-  connection.release();
 });
 
 module.exports = db.promise();   // using promise version (cleaner code)

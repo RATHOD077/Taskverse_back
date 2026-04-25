@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 /**
  * Get all versions for a specific customer document
@@ -7,6 +8,14 @@ exports.getVersionsByDocument = async (req, res) => {
   const { docId } = req.params;
 
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query(
+      'SELECT COUNT(*) AS total FROM document_versions WHERE customer_doc_id = ?',
+      [docId]
+    );
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(`
       SELECT 
         dv.*,
@@ -15,11 +24,13 @@ exports.getVersionsByDocument = async (req, res) => {
       LEFT JOIN user u ON dv.uploaded_by = u.id
       WHERE dv.customer_doc_id = ?
       ORDER BY dv.created_at DESC
-    `, [docId]);
+      LIMIT ? OFFSET ?
+    `, [docId, limit, offset]);
 
     res.json({
       success: true,
-      versions: rows
+      versions: rows,
+      pagination: getPagingMeta({ total, page, limit })
     });
   } catch (error) {
     console.error('Get document versions error:', error);

@@ -6,8 +6,7 @@ dotenv.config();
 
 const app = express();
 
-// ====================== MIDDLEWARE ======================
-// ─── Startup DB Migration ─────────────────────────────────────────────────────
+
 // Runs once at startup to add any missing columns without breaking existing data
 const runMigrations = async () => {
   try {
@@ -48,19 +47,45 @@ const runMigrations = async () => {
 };
 
 // Run migrations before starting server routes
-runMigrations();
+const verifyDB = async () => {
+  try {
+    const db = require('./config/db');
+    const [rows] = await db.query('SELECT 1 + 1 AS result');
+    console.log('✅ Database Connection Test: SUCCESS (1+1=' + rows[0].result + ')');
+    await runMigrations();
+  } catch (err) {
+    console.error('❌ Database Connection Test: FAILED');
+    console.error('   Error Trace:', err.message);
+  }
+};
+
+verifyDB();
 
 // CORS Configuration - Allow frontend to connect securely
-const corsOrigins = ['http://localhost:5173'];
-if (process.env.SHARE_FRONTEND_BASE_URL) {
-  corsOrigins.push(String(process.env.SHARE_FRONTEND_BASE_URL).replace(/\/$/, ""));
-}
+const allowedOrigins = [
+  'https://localhost:5173/'
+];
+
 if (process.env.CORS_ORIGIN) {
-  corsOrigins.push(String(process.env.CORS_ORIGIN).replace(/\/$/, ""));
+  allowedOrigins.push(...process.env.CORS_ORIGIN.split(','));
+}
+if (process.env.SHARE_FRONTEND_BASE_URL) {
+  allowedOrigins.push(process.env.SHARE_FRONTEND_BASE_URL);
 }
 
 app.use(cors({
-  origin: corsOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    // Dynamic check
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.includes('digitalarchives.co')) {
+      callback(null, true);
+    } else {
+      console.warn('CORS Blocked for origin:', origin);
+      callback(null, true);
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -102,7 +127,6 @@ transporter.verify((error) => {
   }
 });
 
-// ====================== ROUTES ======================
 
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');

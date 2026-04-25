@@ -5,23 +5,31 @@
 
 const db = require('../config/db');
 const bcrypt = require('bcrypt');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 /**
  * Get All Customers
  */
 exports.getAllCustomers = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM customer');
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(`
       SELECT id, name, contact, email, address, city, state, pincode,
              aadhar_card_number, pan_card_number, referred_by, dob, 
              added_by, created_at
       FROM customer
       ORDER BY created_at DESC
-    `);
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
 
     res.json({
       success: true,
-      customers: rows
+      customers: rows,
+      pagination: getPagingMeta({ total, page, limit })
     });
   } catch (err) {
     console.error('Get customers error:', err);
@@ -38,6 +46,24 @@ exports.getAllCustomers = async (req, res) => {
 exports.getEmpCustomers = async (req, res) => {
   const empId = req.user?.id;
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query(`
+      SELECT COUNT(DISTINCT cust.id) AS total
+      FROM customer cust
+      WHERE EXISTS (
+        SELECT 1 FROM cases c
+        WHERE c.client_id = cust.id
+        AND c.assigned_to = ?
+      )
+      OR EXISTS (
+        SELECT 1 FROM task t
+        WHERE t.client_id = cust.id
+        AND t.assigned_to = ?
+      )
+    `, [empId, empId]);
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(`
       SELECT DISTINCT 
         cust.id, cust.name, cust.contact, cust.email, cust.address, 
@@ -56,11 +82,13 @@ exports.getEmpCustomers = async (req, res) => {
         AND t.assigned_to = ?
       )
       ORDER BY cust.created_at DESC
-    `, [empId, empId]);
+      LIMIT ? OFFSET ?
+    `, [empId, empId, limit, offset]);
 
     res.json({
       success: true,
-      customers: rows
+      customers: rows,
+      pagination: getPagingMeta({ total, page, limit })
     });
   } catch (err) {
     console.error('Get emp customers error:', err);

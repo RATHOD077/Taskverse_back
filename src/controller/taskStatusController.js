@@ -1,14 +1,21 @@
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 exports.getAllTaskStatuses = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM task_statuses');
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(
       `SELECT 
          ts.*,
          au.admin_name AS added_by_name
        FROM task_statuses ts
        LEFT JOIN admin_user au ON ts.added_by = au.id
-        ORDER BY ts.created_at DESC`
+        ORDER BY ts.created_at DESC
+        LIMIT ? OFFSET ?`,
+      [limit, offset]
     );
 
     const taskStatuses = rows.map(r => ({
@@ -17,7 +24,11 @@ exports.getAllTaskStatuses = async (req, res) => {
       created_at: r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : ''
     }));
 
-    res.json({ success: true, taskStatuses });
+    res.json({
+      success: true,
+      taskStatuses,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     console.error('Error fetching task statuses:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch task statuses' });

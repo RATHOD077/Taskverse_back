@@ -2,6 +2,7 @@
 const dotenv = require('dotenv');
 const db = require('../config/db');
 const twilio = require('twilio');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 dotenv.config();
 
@@ -205,14 +206,18 @@ const sendSms = async (req, res) => {
 // Get SMS Logs Controller
 const getSmsLogs = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.execute('SELECT COUNT(*) AS total FROM sms_logs');
+    const total = countRows[0]?.total || 0;
+
     const [logs] = await db.execute(`
       SELECT 
         id, sender, recipient AS \`to\`, body, status, 
         gateway, error_message, message_id, scheduled_at, created_at AS timestamp
       FROM sms_logs 
       ORDER BY created_at DESC 
-      LIMIT 100
-    `);
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
 
     const formattedLogs = logs.map((log) => ({
       id: log.id,
@@ -229,7 +234,11 @@ const getSmsLogs = async (req, res) => {
       error: log.error_message
     }));
 
-    res.json({ success: true, logs: formattedLogs });
+    res.json({
+      success: true,
+      logs: formattedLogs,
+      pagination: getPagingMeta({ total, page, limit })
+    });
 
   } catch (error) {
     console.error("❌ ERROR in getSmsLogs:", error);

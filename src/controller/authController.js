@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_123456789';
+const JWT_SECRET = process.env.JWT_SECRET || 'tasksarsnkg,mfnfvajdngkjnbskjnfdkjfnkjvnfjakdngkjkjdzkfjfvkjkjgjvkjad';
 
 exports.adminLogin = async (req, res) => {
   const { email, password } = req.body;
@@ -18,7 +18,7 @@ exports.adminLogin = async (req, res) => {
 
     if (admins.length === 0) {
       console.log('No admin found with email:', email);
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Email is not valid' });
     }
 
     const admin = admins[0];
@@ -29,13 +29,17 @@ exports.adminLogin = async (req, res) => {
     console.log('Password match result:', isMatch);   // ← This will tell us the truth
 
     if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid email or password' });
+      return res.status(401).json({ message: 'Password is not valid' });
     }
 
     const token = jwt.sign(
-      { id: admin.id, email: admin.email, role: 'admin' },
+      {
+        id: admin.id,
+        email: admin.email,
+        role: 'admin'
+      },
       JWT_SECRET,
-      { expiresIn: '365d' }  // 1 year — only logout clears the session
+      { expiresIn: '365d' }
     );
 
     res.json({

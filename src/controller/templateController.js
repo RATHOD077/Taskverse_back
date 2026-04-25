@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 // Auto-migrate: create email_templates table
 (async () => {
@@ -21,8 +22,19 @@ const db = require('../config/db');
 
 const getTemplates = async (req, res) => {
   try {
-    const [templates] = await db.execute('SELECT * FROM email_templates ORDER BY created_at DESC');
-    res.json({ success: true, templates });
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.execute('SELECT COUNT(*) AS total FROM email_templates');
+    const total = countRows[0]?.total || 0;
+
+    const [templates] = await db.execute(
+      'SELECT * FROM email_templates ORDER BY created_at DESC LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
+    res.json({
+      success: true,
+      templates,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to fetch templates', error: error.message });
   }

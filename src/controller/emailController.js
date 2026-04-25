@@ -2,6 +2,7 @@
 const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 dotenv.config();
 
@@ -212,14 +213,18 @@ const getEmailLogs = async (req, res) => {
   try {
     console.log("Fetching email logs...");
 
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.execute('SELECT COUNT(*) AS total FROM email_logs');
+    const total = countRows[0]?.total || 0;
+
     const [logs] = await db.execute(`
       SELECT 
         id, sender, recipient AS \`to\`, subject, body, status, 
         gateway, error_message, message_id, scheduled_at, created_at AS timestamp
       FROM email_logs 
       ORDER BY created_at DESC 
-      LIMIT 100
-    `);
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
 
     console.log(`Found ${logs.length} email logs`);
 
@@ -243,7 +248,11 @@ const getEmailLogs = async (req, res) => {
       error: log.error_message
     }));
 
-    res.json({ success: true, logs: formattedLogs });
+    res.json({
+      success: true,
+      logs: formattedLogs,
+      pagination: getPagingMeta({ total, page, limit })
+    });
 
   } catch (error) {
     console.error("❌ CRITICAL ERROR in getEmailLogs:", error);

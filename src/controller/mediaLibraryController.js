@@ -3,6 +3,7 @@ const db = require('../config/db');
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 const getShareSecret = () => {
   // In production, set SHARE_LINK_SECRET in environment variables.
@@ -67,23 +68,11 @@ const resolveDocumentFullPath = (filePath) => {
 };
 
 const getFrontendBaseUrl = (req) => {
-  // For other devices to open the share link, set SHARE_FRONTEND_BASE_URL to a LAN IP/domain that they can reach.
-  // Example: http://192.168.1.10:5173
-  return (
-    process.env.SHARE_FRONTEND_BASE_URL ||
-    process.env.SHARE_LINK_BASE_URL ||
-    req.get("origin") ||
-    "http://localhost:5173"
-  );
+  return req.app.locals.frontendBaseUrl;
 };
 
 const getBackendBaseUrl = (req) => {
-  // Backend endpoints must be reachable from the client/device network.
-  return (
-    process.env.SHARE_BACKEND_BASE_URL ||
-    process.env.SHARE_BASE_URL ||
-    `${req.protocol}://${req.get("host")}`
-  );
+  return req.app.locals.backendBaseUrl;
 };
 
 const getRemainingMinutes = (expSeconds) => {
@@ -99,6 +88,11 @@ const getRemainingMinutes = (expSeconds) => {
 // Get all folders with document count - FIXED for ONLY_FULL_GROUP_BY
 exports.getFolders = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM folders');
+    const total = countRows[0]?.total || 0;
+
     const [folders] = await db.query(`
       SELECT 
         f.id,
@@ -116,7 +110,8 @@ exports.getFolders = async (req, res) => {
         f.color, 
         f.created_at
       ORDER BY f.created_at DESC
-    `);
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
     
     const formattedFolders = folders.map(f => ({
       id: f.id,
@@ -129,7 +124,8 @@ exports.getFolders = async (req, res) => {
 
     res.json({ 
       success: true, 
-      folders: formattedFolders 
+      folders: formattedFolders,
+      pagination: getPagingMeta({ total, page, limit })
     });
   } catch (error) {
     console.error('=== Error fetching folders ===');
@@ -149,6 +145,27 @@ exports.getEmpFolders = async (req, res) => {
     if (!userId) {
        return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
+
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query(`
+      SELECT COUNT(DISTINCT f.id) AS total
+      FROM folders f
+      WHERE EXISTS (
+        SELECT 1 FROM cases c
+        LEFT JOIN customer cust ON cust.id = c.client_id
+        WHERE LOWER(cust.name) COLLATE utf8mb4_unicode_ci = LOWER(f.name) COLLATE utf8mb4_unicode_ci
+        AND c.assigned_to = ?
+      )
+      OR EXISTS (
+        SELECT 1 FROM task t
+        LEFT JOIN customer cust ON cust.id = t.client_id
+        WHERE (LOWER(cust.name) COLLATE utf8mb4_unicode_ci = LOWER(f.name) COLLATE utf8mb4_unicode_ci OR FIND_IN_SET(f.id, t.folder_access))
+        AND t.assigned_to = ?
+      )
+    `, [userId, userId]);
+    const total = countRows[0]?.total || 0;
+
     const [folders] = await db.query(`
       SELECT 
         f.id,
@@ -160,8 +177,9 @@ exports.getEmpFolders = async (req, res) => {
       FROM folders f
       LEFT JOIN documents d ON d.folder_id = f.id
       WHERE EXISTS (
-        SELECT 1 FROM cases c 
-        WHERE LOWER(c.client_name) COLLATE utf8mb4_unicode_ci = LOWER(f.name) COLLATE utf8mb4_unicode_ci
+        SELECT 1 FROM cases c
+        LEFT JOIN customer cust ON cust.id = c.client_id
+        WHERE LOWER(cust.name) COLLATE utf8mb4_unicode_ci = LOWER(f.name) COLLATE utf8mb4_unicode_ci
         AND c.assigned_to = ?
       )
       OR EXISTS (
@@ -177,7 +195,8 @@ exports.getEmpFolders = async (req, res) => {
         f.color, 
         f.created_at
       ORDER BY f.created_at DESC
-    `, [userId, userId]);
+      LIMIT ? OFFSET ?
+    `, [userId, userId, limit, offset]);
     
     const formattedFolders = folders.map(f => ({
       id: f.id,
@@ -190,7 +209,8 @@ exports.getEmpFolders = async (req, res) => {
 
     res.json({ 
       success: true, 
-      folders: formattedFolders 
+      folders: formattedFolders,
+      pagination: getPagingMeta({ total, page, limit })
     });
   } catch (error) {
     console.error('=== Error fetching emp folders ===');
@@ -248,14 +268,23 @@ exports.deleteFolder = async (req, res) => {
 exports.getDocumentsByFolder = async (req, res) => {
   try {
     const { folderId } = req.params;
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query(
+      'SELECT COUNT(*) AS total FROM documents WHERE folder_id = ?',
+      [folderId]
+    );
+    const total = countRows[0]?.total || 0;
+
     const [documents] = await db.query(
       `SELECT 
          id, name, file_type as type, 
          file_size, uploaded_at, file_path 
        FROM documents 
        WHERE folder_id = ? 
-       ORDER BY uploaded_at DESC`,
-      [folderId]
+       ORDER BY uploaded_at DESC
+       LIMIT ? OFFSET ?`,
+      [folderId, limit, offset]
     );
 
     const formattedDocs = documents.map(d => ({
@@ -269,7 +298,11 @@ exports.getDocumentsByFolder = async (req, res) => {
       path: d.file_path
     }));
 
-    res.json({ success: true, documents: formattedDocs });
+    res.json({
+      success: true,
+      documents: formattedDocs,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (error) {
     console.error('Error fetching documents:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch documents' });

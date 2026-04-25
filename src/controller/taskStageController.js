@@ -1,7 +1,12 @@
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 exports.getAllStages = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM task_stages');
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(
       `SELECT 
          ts.id,
@@ -11,7 +16,9 @@ exports.getAllStages = async (req, res) => {
          au.admin_name AS added_by_name
        FROM task_stages ts
        LEFT JOIN admin_user au ON ts.added_by = au.id
-       ORDER BY ts.created_at DESC`
+       ORDER BY ts.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
     );
 
     const stages = rows.map(r => ({
@@ -24,7 +31,11 @@ exports.getAllStages = async (req, res) => {
       status: 'Active'
     }));
 
-    res.json({ success: true, stages });
+    res.json({
+      success: true,
+      stages,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     console.error('Error fetching task stages:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch task stages' });

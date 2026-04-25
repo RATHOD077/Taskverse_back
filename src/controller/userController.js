@@ -9,8 +9,9 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_key_123456789';
+const JWT_SECRET = process.env.JWT_SECRET || 'tasksarsnkg,mfnfvajdngkjnbskjnfdkjfnkjvnfjakdngkjkjdzkfjfvkjkjgjvkjad';
 
 /**
  * User Login
@@ -50,7 +51,7 @@ exports.userLogin = async (req, res) => {
     if (rows.length === 0) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: 'Email is not valid'
       });
     }
 
@@ -62,7 +63,7 @@ exports.userLogin = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: 'Password is not valid'
       });
     }
 
@@ -108,15 +109,26 @@ exports.userLogin = async (req, res) => {
  */
 exports.getAllUsers = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM user');
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(
       `SELECT u.id, u.username, u.email, u.contact, u.status, u.profile_photo,
               u.created_at, r.id AS role_id, r.role_name AS role_name
        FROM user u
        LEFT JOIN roles r ON u.role_id = r.id
-       ORDER BY u.created_at DESC`
+       ORDER BY u.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
     );
 
-    res.json({ success: true, users: rows });
+    res.json({
+      success: true,
+      users: rows,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (error) {
     console.error('Get all users error:', error);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -309,15 +321,28 @@ exports.getMyTasks = async (req, res) => {
   }
 
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query(
+      'SELECT COUNT(*) AS total FROM task WHERE created_by = ?',
+      [userId]
+    );
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(
       `SELECT id, task_name, total_stages, required_time, priority, status, created_at, task_cost
        FROM task
        WHERE created_by = ? 
-       ORDER BY created_at DESC`,
-      [userId]
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`,
+      [userId, limit, offset]
     );
 
-    res.json({ success: true, tasks: rows });
+    res.json({
+      success: true,
+      tasks: rows,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (error) {
     console.error('Get my tasks error:', error);
     res.status(500).json({

@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const reminderService = require('../services/reminderService');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 /**
  * GET /api/reminders/settings
@@ -7,8 +8,19 @@ const reminderService = require('../services/reminderService');
  */
 exports.getReminderSettings = async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM automatic_reminders ORDER BY type ASC');
-    res.json({ success: true, settings: rows });
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM automatic_reminders');
+    const total = countRows[0]?.total || 0;
+
+    const [rows] = await db.query(
+      'SELECT * FROM automatic_reminders ORDER BY type ASC LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
+    res.json({
+      success: true,
+      settings: rows,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     console.error('getReminderSettings error:', err);
     res.status(500).json({ success: false, message: 'Server error' });

@@ -1,9 +1,11 @@
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 // ─── GET ALL HEARINGS ─────────────────────────────────────────────────────────
 exports.getAllHearings = async (req, res) => {
   try {
     const { search = '', status = '', case_id = '' } = req.query;
+    const { page, limit, offset } = getPagination(req.query);
 
     let conditions = [];
     const params = [];
@@ -16,6 +18,15 @@ exports.getAllHearings = async (req, res) => {
     if (case_id) { conditions.push('h.case_id = ?');  params.push(case_id); }
 
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    const [countRows] = await db.query(
+      `SELECT COUNT(*) AS total
+       FROM hearings h
+       LEFT JOIN cases c ON h.case_id = c.id
+       ${where}`,
+      params
+    );
+    const total = countRows[0]?.total || 0;
 
     const [rows] = await db.query(
       `SELECT
@@ -38,8 +49,9 @@ exports.getAllHearings = async (req, res) => {
         LEFT JOIN cases    c   ON h.case_id   = c.id
         LEFT JOIN customer cust ON c.client_id = cust.id
         ${where}
-        ORDER BY h.hearing_date DESC, h.hearing_time DESC`,
-      params
+        ORDER BY h.hearing_date DESC, h.hearing_time DESC
+        LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
     );
 
     const hearings = rows.map(r => ({
@@ -52,7 +64,11 @@ exports.getAllHearings = async (req, res) => {
         : '',
     }));
 
-    res.json({ success: true, hearings, total: hearings.length });
+    res.json({
+      success: true,
+      hearings,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     console.error('Error fetching hearings:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch hearings' });
@@ -191,15 +207,28 @@ exports.deleteHearing = async (req, res) => {
 exports.getHearingsByCase = async (req, res) => {
   const { caseId } = req.params;
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query(
+      'SELECT COUNT(*) AS total FROM hearings WHERE case_id = ?',
+      [caseId]
+    );
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(
       `SELECT h.*, c.case_id AS case_ref, c.title AS case_title
        FROM hearings h
        LEFT JOIN cases c ON h.case_id = c.id
        WHERE h.case_id = ?
-       ORDER BY h.hearing_date ASC`,
-      [caseId]
+       ORDER BY h.hearing_date ASC
+       LIMIT ? OFFSET ?`,
+      [caseId, limit, offset]
     );
-    res.json({ success: true, hearings: rows });
+    res.json({
+      success: true,
+      hearings: rows,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     console.error('Error fetching hearings by case:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch hearings' });

@@ -1,14 +1,23 @@
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 /**
  * Get all physical files
  */
 exports.getAllPhysicalFiles = async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM physical_file ORDER BY id DESC');
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM physical_file');
+    const total = countRows[0]?.total || 0;
+
+    const [rows] = await db.query(
+      'SELECT * FROM physical_file ORDER BY id DESC LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
     res.json({
       success: true,
-      physicalFiles: rows
+      physicalFiles: rows,
+      pagination: getPagingMeta({ total, page, limit })
     });
   } catch (error) {
     console.error('Get physical files error:', error);

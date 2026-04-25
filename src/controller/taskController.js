@@ -8,6 +8,7 @@
  */
 
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 // ─── Get All Tasks (Admin) ────────────────────────────────────────────────────
 /**
@@ -15,6 +16,11 @@ const db = require('../config/db');
  */
 exports.getAllTasks = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM task');
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(`
       SELECT 
         t.id,
@@ -40,11 +46,13 @@ exports.getAllTasks = async (req, res) => {
       LEFT JOIN customer c ON t.client_id = c.id
       LEFT JOIN cases ca ON t.case_id = ca.id
       ORDER BY t.created_at DESC
-    `);
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
 
     res.json({ 
       success: true, 
-      tasks: rows 
+      tasks: rows,
+      pagination: getPagingMeta({ total, page, limit })
     });
   } catch (error) {
     console.error('Get all tasks error:', error);
@@ -240,6 +248,14 @@ exports.getEmpTasks = async (req, res) => {
   }
 
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query(
+      'SELECT COUNT(*) AS total FROM task WHERE assigned_to = ?',
+      [empId]
+    );
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(`
       SELECT 
         t.id,
@@ -263,11 +279,13 @@ exports.getEmpTasks = async (req, res) => {
       LEFT JOIN cases ca ON t.case_id = ca.id
       WHERE t.assigned_to = ?
       ORDER BY t.created_at DESC
-    `, [empId]);
+      LIMIT ? OFFSET ?
+    `, [empId, limit, offset]);
 
     res.json({ 
       success: true, 
-      tasks: rows 
+      tasks: rows,
+      pagination: getPagingMeta({ total, page, limit })
     });
   } catch (error) {
     console.error('Get emp tasks error:', error);

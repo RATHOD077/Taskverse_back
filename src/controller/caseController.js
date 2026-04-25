@@ -1,9 +1,11 @@
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 // ─── GET ALL CASES ────────────────────────────────────────────────────────────
 exports.getAllCases = async (req, res) => {
   try {
     const { search = '', status = '', priority = '', type = '', active_status = '' } = req.query;
+    const { page, limit, offset } = getPagination(req.query);
 
     let conditions = [];
     const params = [];
@@ -18,6 +20,15 @@ exports.getAllCases = async (req, res) => {
     if (active_status) { conditions.push('c.active_status = ?'); params.push(active_status); }
 
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    const [countRows] = await db.query(
+      `SELECT COUNT(*) AS total
+       FROM cases c
+       LEFT JOIN customer cust ON c.client_id = cust.id
+       ${where}`,
+      params
+    );
+    const total = countRows[0]?.total || 0;
 
     const [rows] = await db.query(
       `SELECT 
@@ -39,8 +50,9 @@ exports.getAllCases = async (req, res) => {
        LEFT JOIN user     u    ON c.assigned_to = u.id
        LEFT JOIN customer cust ON c.client_id = cust.id
        ${where}
-       ORDER BY c.created_at DESC`,
-      params
+       ORDER BY c.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
     );
 
     const cases = rows.map(r => ({
@@ -49,7 +61,11 @@ exports.getAllCases = async (req, res) => {
       created_at:  r.created_at  ? new Date(r.created_at).toISOString().split('T')[0]  : '',
     }));
 
-    res.json({ success: true, cases, total: cases.length });
+    res.json({
+      success: true,
+      cases,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     console.error('Error fetching cases:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch cases' });

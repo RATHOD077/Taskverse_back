@@ -1,7 +1,7 @@
 // backend/src/middleware/authMiddleware.js
 const jwt = require('jsonwebtoken');
 // ⚠️ IMPORTANT: Must use the SAME secret as authController.js and userController.js
-const JWT_SECRET = process.env.JWT_SECRET || 'tasksarsnkg';
+const JWT_SECRET = process.env.JWT_SECRET || 'tasksarsnkg,mfnfvajdngkjnbskjnfdkjfnkjvnfjakdngkjkjdzkfjfvkjkjgjvkjad';
 
 // Protect any logged-in user (employee or admin)
 exports.verifyToken = (req, res, next) => {

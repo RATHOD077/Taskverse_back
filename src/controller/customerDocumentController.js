@@ -4,14 +4,23 @@
  */
 
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 /**
  * Get All Customer Documents
  */
 exports.getAllDocuments = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM customer_doc');
+    const total = countRows[0]?.total || 0;
+
     // 1. Fetch documents
-    const [docs] = await db.query('SELECT * FROM customer_doc ORDER BY id DESC');
+    const [docs] = await db.query(
+      'SELECT * FROM customer_doc ORDER BY id DESC LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
     
     // 2. Fetch customers for mapping
     const [custs] = await db.query('SELECT id, name, email FROM customer');
@@ -29,7 +38,8 @@ exports.getAllDocuments = async (req, res) => {
 
     res.json({
       success: true,
-      documents: rows
+      documents: rows,
+      pagination: getPagingMeta({ total, page, limit })
     });
   } catch (error) {
     console.error('Get documents error:', error);

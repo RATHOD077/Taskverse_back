@@ -1,14 +1,21 @@
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 exports.getAllTaskTypes = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM task_types');
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(
       `SELECT 
          tt.*,
          au.admin_name AS added_by_name
        FROM task_types tt
        LEFT JOIN admin_user au ON tt.added_by = au.id
-        ORDER BY tt.created_at DESC`
+        ORDER BY tt.created_at DESC
+        LIMIT ? OFFSET ?`,
+      [limit, offset]
     );
 
     const taskTypes = rows.map(r => ({
@@ -16,7 +23,11 @@ exports.getAllTaskTypes = async (req, res) => {
       created_at: r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : ''
     }));
 
-    res.json({ success: true, taskTypes });
+    res.json({
+      success: true,
+      taskTypes,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     console.error('Error fetching task types:', err);
     res.status(500).json({ success: false, message: 'Failed to fetch task types' });

@@ -1,5 +1,6 @@
 // backend/src/controller/roleController.js
 const db = require('../config/db');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 async function ensureRolePermissionsTable() {
   // Auto-create table if it doesn't exist (no migrations in repo).
@@ -97,10 +98,19 @@ const PERMISSION_CATALOG = [
 // Get all roles
 exports.getAllRoles = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM roles');
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(
-      'SELECT id, role_name AS name, description, created_at FROM roles ORDER BY role_name ASC'
+      'SELECT id, role_name AS name, description, created_at FROM roles ORDER BY role_name ASC LIMIT ? OFFSET ?',
+      [limit, offset]
     );
-    res.json({ success: true, roles: rows });
+    res.json({
+      success: true,
+      roles: rows,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });

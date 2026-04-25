@@ -1,6 +1,7 @@
 // src/controller/notificationController.js
 const db = require('../config/db');
 const { sendMail, replacePlaceholders } = require('../config/mailer');
+const { getPagination, getPagingMeta } = require('../utils/pagination');
 
 // ───────────────────────────────────────────────────────────────
 // SMTP SETTINGS
@@ -70,8 +71,19 @@ exports.testSmtpSettings = async (req, res) => {
 /** GET /api/notifications/templates */
 exports.getTemplates = async (req, res) => {
   try {
-    const [rows] = await db.query('SELECT * FROM notification_templates ORDER BY id ASC');
-    res.json({ success: true, templates: rows });
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM notification_templates');
+    const total = countRows[0]?.total || 0;
+
+    const [rows] = await db.query(
+      'SELECT * FROM notification_templates ORDER BY id ASC LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
+    res.json({
+      success: true,
+      templates: rows,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     console.error('getTemplates error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -281,10 +293,19 @@ exports.sendDocumentExpiryNotification = async (req, res) => {
 /** GET /api/notifications/users — Get all active users for team selection */
 exports.getUsers = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM user WHERE is_deleted = 0');
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(
-      'SELECT id, username, email, role FROM user WHERE is_deleted = 0 ORDER BY username ASC'
+      'SELECT id, username, email, role FROM user WHERE is_deleted = 0 ORDER BY username ASC LIMIT ? OFFSET ?',
+      [limit, offset]
     );
-    res.json({ success: true, users: rows });
+    res.json({
+      success: true,
+      users: rows,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -294,15 +315,31 @@ exports.getUsers = async (req, res) => {
 exports.getTasksByUser = async (req, res) => {
   const { user_id } = req.query;
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
     let query = 'SELECT id, task_name, expiry_date FROM task';
+    let countQuery = 'SELECT COUNT(*) AS total FROM task';
     const params = [];
+    const countParams = [];
     if (user_id) {
       query += ' WHERE assigned_to = ?';
       params.push(user_id);
+      countQuery += ' WHERE assigned_to = ?';
+      countParams.push(user_id);
     }
     query += ' ORDER BY created_at DESC';
+    query += ' LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const [countRows] = await db.query(countQuery, countParams);
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(query, params);
-    res.json({ success: true, tasks: rows });
+    res.json({
+      success: true,
+      tasks: rows,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -311,10 +348,19 @@ exports.getTasksByUser = async (req, res) => {
 /** GET /api/notifications/customers — Get all customers for dropdown */
 exports.getCustomers = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM customer');
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(
-      'SELECT id, name, email FROM customer ORDER BY name ASC'
+      'SELECT id, name, email FROM customer ORDER BY name ASC LIMIT ? OFFSET ?',
+      [limit, offset]
     );
-    res.json({ success: true, customers: rows });
+    res.json({
+      success: true,
+      customers: rows,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -324,23 +370,42 @@ exports.getCustomers = async (req, res) => {
 exports.getDocumentsByCustomer = async (req, res) => {
   const { customer_id } = req.query;
   try {
+    const { page, limit, offset } = getPagination(req.query);
+
     let query = `
       SELECT cd.id, cd.document_path, cd.validity, cd.doc_type,
              c.id AS customer_id, c.name AS client_name, c.email AS client_email
       FROM customer_doc cd
       JOIN customer c ON cd.customer_id = c.id
     `;
+    let countQuery = `
+      SELECT COUNT(*) AS total
+      FROM customer_doc cd
+      JOIN customer c ON cd.customer_id = c.id
+    `;
     const params = [];
+    const countParams = [];
 
     if (customer_id) {
       query += ' WHERE cd.customer_id = ?';
       params.push(customer_id);
+      countQuery += ' WHERE cd.customer_id = ?';
+      countParams.push(customer_id);
     }
 
     query += ' ORDER BY cd.validity ASC';
+    query += ' LIMIT ? OFFSET ?';
+    params.push(limit, offset);
+
+    const [countRows] = await db.query(countQuery, countParams);
+    const total = countRows[0]?.total || 0;
 
     const [rows] = await db.query(query, params);
-    res.json({ success: true, documents: rows });
+    res.json({
+      success: true,
+      documents: rows,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
@@ -349,10 +414,19 @@ exports.getDocumentsByCustomer = async (req, res) => {
 /** GET /api/notifications/logs — View notification history */
 exports.getNotificationLogs = async (req, res) => {
   try {
+    const { page, limit, offset } = getPagination(req.query);
+    const [countRows] = await db.query('SELECT COUNT(*) AS total FROM notification_logs');
+    const total = countRows[0]?.total || 0;
+
     const [rows] = await db.query(
-      'SELECT * FROM notification_logs ORDER BY sent_at DESC LIMIT 100'
+      'SELECT * FROM notification_logs ORDER BY sent_at DESC LIMIT ? OFFSET ?',
+      [limit, offset]
     );
-    res.json({ success: true, logs: rows });
+    res.json({
+      success: true,
+      logs: rows,
+      pagination: getPagingMeta({ total, page, limit })
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server error' });
   }
